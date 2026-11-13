@@ -1,0 +1,1821 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PaySync — Pengurus Perbelanjaan Trip</title>
+
+  <!-- Supabase JS SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    /* ===== CSS VARIABLES / THEME ===== */
+    :root {
+      --royal-yellow: #F5C518;
+      --royal-yellow-light: #FDE97A;
+      --royal-yellow-dark: #C9A000;
+      --burgundy: #800020;
+      --burgundy-light: #A0234A;
+      --burgundy-dark: #5C0016;
+      --olive: #6B7A2A;
+      --olive-light: #8A9E35;
+      --olive-dark: #4E5A1E;
+      --bg: #FAF9F6;
+      --surface: #FFFFFF;
+      --surface2: #F4F3EF;
+      --border: #E5E0D5;
+      --text: #1F1E1A;
+      --text-muted: #6B6560;
+      --text-light: #9A958F;
+      --red: #DC2626;
+      --red-light: #FEE2E2;
+      --green: #16A34A;
+      --green-light: #DCFCE7;
+      --yellow-light: #FEF9C3;
+      --sidebar-w: 260px;
+      --radius: 10px;
+      --shadow: 0 2px 8px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: -apple-system, "Segoe UI", system-ui, sans-serif; font-size: 14px; background: var(--bg); color: var(--text); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    #app { display: flex; height: 100vh; overflow: hidden; }
+
+    /* ===== SIDEBAR ===== */
+    #sidebar {
+      width: var(--sidebar-w); min-width: var(--sidebar-w);
+      background: var(--burgundy); display: flex; flex-direction: column;
+      height: 100vh; overflow-y: auto; transition: transform 0.3s ease; z-index: 100;
+    }
+    .sidebar-logo { padding: 20px 16px 14px; border-bottom: 1px solid var(--burgundy-light); }
+    .sidebar-logo h1 { color: var(--royal-yellow); font-size: 22px; font-weight: 800; letter-spacing: 1px; }
+    .sidebar-logo p { color: rgba(255,255,255,0.55); font-size: 11px; margin-top: 2px; }
+    .sidebar-section-title { padding: 14px 16px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: rgba(255,255,255,0.4); }
+    .sidebar-trip-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; color: rgba(255,255,255,0.8); font-size: 13px; transition: background 0.15s; border-left: 3px solid transparent; }
+    .sidebar-trip-item:hover { background: rgba(255,255,255,0.08); }
+    .sidebar-trip-item.active { background: rgba(245,197,24,0.15); border-left-color: var(--royal-yellow); color: var(--royal-yellow); font-weight: 600; }
+    .sidebar-trip-icon { width: 30px; height: 30px; border-radius: 8px; background: rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+    .sidebar-trip-info { flex: 1; min-width: 0; }
+    .sidebar-trip-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-trip-meta { font-size: 10px; color: rgba(255,255,255,0.4); margin-top: 1px; }
+    .sidebar-trip-item.active .sidebar-trip-meta { color: rgba(245,197,24,0.6); }
+    .sidebar-status-badge { font-size: 9px; padding: 2px 6px; border-radius: 10px; font-weight: 700; }
+    .badge-active { background: var(--olive); color: #fff; }
+    .badge-completed { background: var(--text-muted); color: #fff; }
+    .sidebar-btn-new { margin: 12px 16px; padding: 10px; background: var(--royal-yellow); color: var(--burgundy); border: none; border-radius: var(--radius); font-weight: 700; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.15s; }
+    .sidebar-btn-new:hover { background: var(--royal-yellow-dark); }
+    .sidebar-footer { margin-top: auto; padding: 14px 16px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 11px; color: rgba(255,255,255,0.3); text-align: center; }
+
+    /* ===== MAIN ===== */
+    #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+    .topbar { display: flex; align-items: center; gap: 12px; padding: 0 20px; height: 56px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .topbar-hamburger { display: none; background: none; border: none; cursor: pointer; padding: 6px; color: var(--burgundy); font-size: 20px; }
+    .topbar-title { font-size: 16px; font-weight: 700; flex: 1; }
+    .topbar-actions { display: flex; gap: 8px; }
+    .content-area { flex: 1; overflow-y: auto; padding: 24px 20px; }
+
+    /* ===== BUTTONS ===== */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; line-height: 1.4; }
+    .btn-primary { background: var(--burgundy); color: #fff; }
+    .btn-primary:hover { background: var(--burgundy-light); }
+    .btn-yellow { background: var(--royal-yellow); color: var(--burgundy); }
+    .btn-yellow:hover { background: var(--royal-yellow-dark); }
+    .btn-olive { background: var(--olive); color: #fff; }
+    .btn-olive:hover { background: var(--olive-dark); }
+    .btn-outline { background: transparent; color: var(--burgundy); border: 1.5px solid var(--burgundy); }
+    .btn-outline:hover { background: var(--burgundy); color: #fff; }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--surface2); }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-xs { padding: 3px 8px; font-size: 11px; border-radius: 6px; }
+
+    /* ===== CARDS ===== */
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .card-title { font-size: 15px; font-weight: 700; }
+
+    /* ===== TRIP CARDS ===== */
+    .trips-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+    .trip-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; cursor: pointer; transition: box-shadow 0.2s, transform 0.2s; box-shadow: var(--shadow); }
+    .trip-card:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+    .trip-card-header { padding: 16px; display: flex; align-items: flex-start; gap: 12px; }
+    .trip-card-emoji { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--royal-yellow-light), var(--royal-yellow)); display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+    .trip-card-info { flex: 1; min-width: 0; }
+    .trip-card-name { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+    .trip-card-date { font-size: 11px; color: var(--text-muted); }
+    .trip-card-body { padding: 0 16px 16px; }
+    .trip-card-stats { display: flex; gap: 16px; padding: 10px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+    .trip-stat { text-align: center; flex: 1; }
+    .trip-stat-value { font-size: 16px; font-weight: 800; color: var(--burgundy); }
+    .trip-stat-label { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+    .trip-card-footer { display: flex; align-items: center; justify-content: space-between; }
+    .trip-card-actions { display: flex; gap: 6px; }
+
+    /* ===== EMPTY STATE ===== */
+    .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty-state-icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; color: var(--text); }
+    .empty-state p { font-size: 13px; max-width: 320px; margin: 0 auto 20px; line-height: 1.6; }
+
+    /* ===== MODALS ===== */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 16px; backdrop-filter: blur(2px); }
+    .modal { background: var(--surface); border-radius: 14px; width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-md); }
+    .modal-lg { max-width: 680px; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); z-index: 1; border-radius: 14px 14px 0 0; }
+    .modal-title { font-size: 16px; font-weight: 700; }
+    .modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--text-muted); padding: 4px; border-radius: 6px; line-height: 1; }
+    .modal-close:hover { background: var(--surface2); }
+    .modal-body { padding: 20px; }
+    .modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; position: sticky; bottom: 0; background: var(--surface); border-radius: 0 0 14px 14px; }
+
+    /* ===== FORMS ===== */
+    .form-group { margin-bottom: 16px; }
+    .form-label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+    .form-label span { color: var(--red); }
+    .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+    .form-input, .form-select, .form-textarea { width: 100%; padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 8px; font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); transition: border-color 0.15s; outline: none; }
+    .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--burgundy); }
+    .form-textarea { resize: vertical; min-height: 70px; }
+    .form-row { display: flex; gap: 12px; }
+    .form-row .form-group { flex: 1; }
+    .form-error { font-size: 11px; color: var(--red); margin-top: 3px; }
+
+    /* ===== TABS ===== */
+    .tabs { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 20px; overflow-x: auto; }
+    .tab-btn { padding: 9px 16px; font-size: 13px; font-weight: 600; background: none; border: none; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; transition: color 0.15s, border-color 0.15s; }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn.active { color: var(--burgundy); border-bottom-color: var(--burgundy); }
+
+    /* ===== EXPENSE ===== */
+    .expense-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .expense-item:last-child { border-bottom: none; }
+    .expense-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; background: var(--surface2); }
+    .expense-details { flex: 1; min-width: 0; }
+    .expense-name { font-weight: 600; font-size: 14px; }
+    .expense-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .expense-amount { text-align: right; flex-shrink: 0; }
+    .expense-total { font-size: 15px; font-weight: 800; }
+    .expense-actions { display: flex; gap: 4px; margin-top: 6px; justify-content: flex-end; }
+
+    /* ===== SETTLEMENT ===== */
+    .settlement-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; margin-bottom: 8px; border: 1px solid var(--border); }
+    .settlement-item.owe { background: var(--red-light); border-color: #fca5a5; }
+    .settlement-item.lend { background: var(--green-light); border-color: #86efac; }
+    .settlement-item.partial { background: var(--yellow-light); border-color: #fde68a; }
+    .settlement-amount { font-size: 15px; font-weight: 800; margin-left: auto; }
+    .settlement-amount.owe { color: var(--red); }
+    .settlement-amount.lend { color: var(--green); }
+
+    /* ===== SPLIT OPTIONS ===== */
+    .split-options { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; margin-bottom: 16px; }
+    .split-option { border: 1.5px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: all 0.15s; background: var(--surface); }
+    .split-option:hover { border-color: var(--burgundy); }
+    .split-option.selected { border-color: var(--burgundy); background: #FFF0F3; }
+    .split-option-title { font-weight: 700; font-size: 13px; }
+    .split-option-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+    /* ===== PAYER ROW ===== */
+    .payer-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+    .payer-row:last-child { border-bottom: none; }
+    .payer-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--burgundy); flex-shrink: 0; }
+
+    /* ===== BADGES ===== */
+    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-category { gap: 4px; }
+    .cat-food { background: #FEF9C3; color: #713F12; }
+    .cat-transport { background: #DBEAFE; color: #1e3a5f; }
+    .cat-hotel { background: #F3E8FF; color: #4c1d95; }
+    .cat-activity { background: #DCFCE7; color: #14532d; }
+    .cat-shopping { background: #FFE4E6; color: #881337; }
+    .cat-medical { background: #FEE2E2; color: #7f1d1d; }
+    .cat-other { background: var(--surface2); color: var(--text-muted); }
+
+    /* ===== STATS ===== */
+    .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; text-align: center; }
+    .stat-card-value { font-size: 20px; font-weight: 800; color: var(--burgundy); }
+    .stat-card-label { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+    /* ===== CURRENCY SECTION ===== */
+    .currency-section-header { display: flex; align-items: center; gap: 8px; margin: 16px 0 10px; font-size: 13px; font-weight: 700; color: var(--text-muted); }
+    .currency-divider { flex: 1; height: 1px; background: var(--border); }
+
+    /* ===== ACTIVITY LOG ===== */
+    .activity-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .activity-item:last-child { border-bottom: none; }
+    .activity-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--royal-yellow); flex-shrink: 0; margin-top: 4px; }
+    .activity-time { color: var(--text-muted); font-size: 11px; }
+
+    /* ===== PROGRESS BAR ===== */
+    .progress-bar { height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--olive), var(--olive-light)); transition: width 0.4s ease; }
+
+    /* ===== CHART ===== */
+    .chart-container { padding: 10px 0; }
+    .chart-bar-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .chart-bar-label { width: 80px; font-size: 11px; color: var(--text-muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .chart-bar-track { flex: 1; height: 18px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
+    .chart-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding-left: 6px; font-size: 10px; font-weight: 700; color: #fff; transition: width 0.4s; }
+    .chart-bar-value { font-size: 11px; font-weight: 700; width: 60px; text-align: left; }
+
+    /* ===== PRINT ===== */
+    .print-btn-area { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+    @media print {
+      #sidebar, .topbar, .no-print, .tabs, .modal-overlay { display: none !important; }
+      #main { display: block; }
+      .content-area { padding: 0; overflow: visible; }
+      .card { box-shadow: none; border: 1px solid #ccc; page-break-inside: avoid; }
+    }
+
+    /* ===== ALERTS ===== */
+    .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: flex; align-items: flex-start; gap: 8px; }
+    .alert-info { background: #EFF6FF; color: #1e40af; border: 1px solid #BFDBFE; }
+    .alert-warn { background: var(--yellow-light); color: #713F12; border: 1px solid #FDE68A; }
+    .alert-success { background: var(--green-light); color: #14532d; border: 1px solid #86efac; }
+    .alert-danger { background: var(--red-light); color: #7f1d1d; border: 1px solid #fca5a5; }
+
+    /* ===== TOGGLE ===== */
+    .toggle-wrapper { display: flex; align-items: center; gap: 8px; }
+    .toggle { position: relative; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 20px; cursor: pointer; transition: background 0.2s; }
+    .toggle-slider:before { content: ''; position: absolute; width: 14px; height: 14px; border-radius: 50%; background: #fff; left: 3px; top: 3px; transition: transform 0.2s; }
+    .toggle input:checked + .toggle-slider { background: var(--olive); }
+    .toggle input:checked + .toggle-slider:before { transform: translateX(16px); }
+
+    /* ===== TOAST ===== */
+    #toast-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 9999; }
+    .toast { background: #1F1E1A; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: 13px; font-weight: 500; box-shadow: var(--shadow-md); animation: slideIn 0.3s ease; max-width: 280px; }
+    .toast.success { border-left: 3px solid var(--olive); }
+    .toast.error { border-left: 3px solid var(--red); }
+    .toast.info { border-left: 3px solid var(--royal-yellow); }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* ===== LOADING OVERLAY ===== */
+    #loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.85); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9000; gap: 12px; }
+    .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--burgundy); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ===== MOBILE ===== */
+    #sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 99; }
+    @media (max-width: 768px) {
+      #sidebar { position: fixed; top: 0; left: 0; bottom: 0; transform: translateX(-100%); }
+      #sidebar.open { transform: translateX(0); }
+      #sidebar-overlay.show { display: block; }
+      .topbar-hamburger { display: flex; align-items: center; }
+      .trips-grid { grid-template-columns: 1fr; }
+      .form-row { flex-direction: column; gap: 0; }
+      .split-options { grid-template-columns: 1fr; }
+      .modal { max-width: 100%; margin: 0; border-radius: 14px 14px 0 0; }
+      .modal-overlay { align-items: flex-end; padding: 0; }
+      .stats-row { grid-template-columns: repeat(2,1fr); }
+    }
+
+    /* ===== SETUP SCREEN ===== */
+    .setup-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: var(--bg); }
+    .setup-card { background: var(--surface); border-radius: 16px; padding: 32px; max-width: 500px; width: 100%; box-shadow: var(--shadow-md); border: 1px solid var(--border); }
+    .setup-card h2 { font-size: 20px; font-weight: 800; color: var(--burgundy); margin-bottom: 6px; }
+    .setup-card p { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div id="loading-overlay" style="display:none">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--text-muted);">Memuatkan data...</div>
+</div>
+
+<!-- Setup Screen (shown when config not set) -->
+<div id="setup-screen" style="display:none">
+  <div class="setup-screen">
+    <div class="setup-card">
+      <div style="font-size:36px;margin-bottom:12px;">⚙️</div>
+      <h2>Konfigurasi Supabase</h2>
+      <p>Masukkan maklumat Supabase anda untuk menghubungkan PaySync dengan cloud database. Data ini disimpan dalam peranti anda sahaja.</p>
+      <div class="form-group">
+        <label class="form-label">Supabase Project URL <span>*</span></label>
+        <input class="form-input" id="setup-url" placeholder="https://xxxxxx.supabase.co" />
+        <div class="form-hint">Contoh: https://yzpqbnjijprooqfuxiny.supabase.co</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Supabase Anon Key <span>*</span></label>
+        <input class="form-input" id="setup-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." />
+        <div class="form-hint">Dapatkan dari: Supabase Dashboard → Settings → API → anon public</div>
+      </div>
+      <div class="alert alert-warn" style="margin-bottom:16px;">
+        ⚠️ Pastikan anda hanya masukkan <strong>anon public key</strong> (bermula dengan eyJ...). Jangan masukkan service_role key.
+      </div>
+      <button class="btn btn-primary" style="width:100%" onclick="saveSupabaseConfig()">Sambung ke Supabase →</button>
+      <div style="text-align:center;margin-top:12px;">
+        <button class="btn btn-ghost btn-sm" onclick="resetConfig()">Reset Konfigurasi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <aside id="sidebar">
+    <div class="sidebar-logo">
+      <h1>💰 PaySync</h1>
+      <p>Pengurus Perbelanjaan Trip</p>
+    </div>
+    <div class="sidebar-section-title">Trip Saya</div>
+    <div id="sidebar-trips"></div>
+    <button class="sidebar-btn-new" onclick="openNewTripModal()">＋ Trip Baru</button>
+    <div class="sidebar-footer">PaySync · Cloud Sync ☁️</div>
+  </aside>
+
+  <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+  <main id="main">
+    <div class="topbar">
+      <button class="topbar-hamburger" onclick="toggleSidebar()">☰</button>
+      <div class="topbar-title" id="topbar-title">PaySync</div>
+      <div class="topbar-actions" id="topbar-actions"></div>
+    </div>
+    <div class="content-area" id="content-area"></div>
+  </main>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- ============================================================ MODALS ============================================================ -->
+
+<!-- Modal: New/Edit Trip -->
+<div class="modal-overlay" id="modal-trip" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-trip-title">Trip Baru</span>
+      <button class="modal-close" onclick="closeModal('modal-trip')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nama Trip <span>*</span></label>
+        <input class="form-input" id="trip-name" placeholder="Cth: Langkawi 2026" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Emoji / Ikon</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;" id="emoji-picker"></div>
+        <input class="form-input" id="trip-emoji-custom" placeholder="Atau taip emoji sendiri" style="margin-top:8px;width:120px" maxlength="2"/>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tarikh Mula</label>
+          <input class="form-input" type="date" id="trip-date-start" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tarikh Tamat</label>
+          <input class="form-input" type="date" id="trip-date-end" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mata Wang Utama</label>
+        <select class="form-select" id="trip-currency">
+          <option value="RM">RM - Ringgit Malaysia</option>
+          <option value="USD">USD - Dolar Amerika</option>
+          <option value="SGD">SGD - Dolar Singapura</option>
+          <option value="JPY">JPY - Yen Jepun</option>
+          <option value="THB">THB - Baht Thailand</option>
+          <option value="IDR">IDR - Rupiah Indonesia</option>
+          <option value="EUR">EUR - Euro</option>
+          <option value="GBP">GBP - Pound Sterling</option>
+          <option value="AUD">AUD - Dolar Australia</option>
+          <option value="KRW">KRW - Won Korea</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password Trip</label>
+        <input class="form-input" type="password" id="trip-password" placeholder="Biarkan kosong jika tiada password" />
+        <div class="form-hint">Hanya orang yang tahu password ini boleh akses trip ini.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-select" id="trip-status">
+          <option value="active">Aktif</option>
+          <option value="completed">Selesai</option>
+          <option value="archived">Diarkibkan</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-trip')">Batal</button>
+      <button class="btn btn-primary" onclick="saveTrip()">Simpan Trip</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Password Gate -->
+<div class="modal-overlay" id="modal-password-gate" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Masukkan Password</span>
+      <button class="modal-close" onclick="closeModal('modal-password-gate')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:32px;margin-bottom:6px;">🔐</div>
+        <div style="font-weight:700;font-size:15px;" id="pg-trip-name"></div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">Trip ini dilindungi password</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="pg-password" placeholder="Masukkan password trip" onkeydown="if(event.key==='Enter')verifyPassword()" />
+        <div class="form-error" id="pg-error" style="display:none">Password salah. Cuba lagi.</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nama Anda</label>
+        <input class="form-input" id="pg-name" placeholder="Masukkan nama anda" onkeydown="if(event.key==='Enter')verifyPassword()" />
+        <div class="form-hint">Nama ini digunakan untuk mengenal pasti anda dalam trip.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-password-gate')">Batal</button>
+      <button class="btn btn-primary" onclick="verifyPassword()">Masuk</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Name Input -->
+<div class="modal-overlay" id="modal-name-input" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Siapa Nama Anda?</span>
+      <button class="modal-close" onclick="closeModal('modal-name-input')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info">Nama ini digunakan untuk mengenal pasti anda dalam trip.</div>
+      <div class="form-group">
+        <label class="form-label">Nama Anda <span>*</span></label>
+        <input class="form-input" id="ni-name" placeholder="Cth: Ali, Siti, Raju..." onkeydown="if(event.key==='Enter')confirmName()" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="confirmName()">Teruskan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add/Edit Member -->
+<div class="modal-overlay" id="modal-member" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-member-title">Tambah Ahli</span>
+      <button class="modal-close" onclick="closeModal('modal-member')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Nama Ahli <span>*</span></label>
+        <input class="form-input" id="member-name" placeholder="Nama ahli" onkeydown="if(event.key==='Enter')saveMember()" />
+      </div>
+      <div id="member-retroactive-section" style="display:none">
+        <div class="alert alert-warn">⚠️ Terdapat perbelanjaan sedia ada dalam trip ini.</div>
+        <div class="form-group">
+          <label class="form-label">Libatkan dalam perbelanjaan sebelum ini?</label>
+          <div class="toggle-wrapper">
+            <label class="toggle"><input type="checkbox" id="member-retroactive" /><span class="toggle-slider"></span></label>
+            <span id="member-retroactive-label" style="font-size:13px;color:var(--text-muted)">Tidak — Hanya libatkan dalam perbelanjaan baru sahaja</span>
+          </div>
+          <div class="form-hint" id="member-retroactive-hint">Jika diaktifkan, ahli ini akan dimasukkan dalam semua pengagihan perbelanjaan sedia ada secara sama rata.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-member')">Batal</button>
+      <button class="btn btn-primary" onclick="saveMember()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add/Edit Expense -->
+<div class="modal-overlay" id="modal-expense" style="display:none">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-expense-title">Tambah Perbelanjaan</span>
+      <button class="modal-close" onclick="closeModal('modal-expense')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group" style="flex:2">
+          <label class="form-label">Nama/Keterangan <span>*</span></label>
+          <input class="form-input" id="exp-desc" placeholder="Cth: Makan Malam, Minyak Kereta..." />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Tarikh <span>*</span></label>
+          <input class="form-input" type="date" id="exp-date" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Jumlah <span>*</span></label>
+          <input class="form-input" type="number" id="exp-amount" placeholder="0.00" step="0.01" min="0" oninput="updateExpensePreview()" />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Mata Wang</label>
+          <select class="form-select" id="exp-currency" onchange="toggleCustomCurrency()">
+            <option value="RM">RM</option>
+            <option value="USD">USD</option>
+            <option value="SGD">SGD</option>
+            <option value="JPY">JPY</option>
+            <option value="THB">THB</option>
+            <option value="IDR">IDR</option>
+            <option value="EUR">EUR</option>
+            <option value="GBP">GBP</option>
+            <option value="AUD">AUD</option>
+            <option value="KRW">KRW</option>
+            <option value="OTHER">Lain-lain...</option>
+          </select>
+          <input class="form-input" id="exp-currency-custom" placeholder="Cth: BDT, PKR..." style="display:none;margin-top:6px;" maxlength="5" oninput="this.value=this.value.toUpperCase()" />
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">Kategori</label>
+          <select class="form-select" id="exp-category">
+            <option value="food">🍽️ Makanan & Minuman</option>
+            <option value="transport">🚗 Pengangkutan</option>
+            <option value="hotel">🏨 Penginapan</option>
+            <option value="activity">🎟️ Aktiviti & Tiket</option>
+            <option value="shopping">🛒 Membeli-belah</option>
+            <option value="medical">🏥 Perubatan</option>
+            <option value="other">📦 Lain-lain</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nota (Opsional)</label>
+        <input class="form-input" id="exp-notes" placeholder="Nota tambahan..." />
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+      <div class="form-group">
+        <label class="form-label">Siapa Yang Membayar? <span>*</span></label>
+        <div id="payer-list"></div>
+        <div class="form-hint" id="payer-hint">Pilih ahli yang membayar dan masukkan jumlah yang telah dibayar.</div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">
+      <div class="form-group">
+        <label class="form-label">Kaedah Pengagihan <span>*</span></label>
+        <div class="split-options">
+          <div class="split-option selected" onclick="selectSplit('equal')" id="split-opt-equal">
+            <div class="split-option-title">⚖️ Sama Rata</div>
+            <div class="split-option-desc">Bahagi sama rata antara semua ahli</div>
+          </div>
+          <div class="split-option" onclick="selectSplit('exact')" id="split-opt-exact">
+            <div class="split-option-title">🎯 Jumlah Tepat</div>
+            <div class="split-option-desc">Tetapkan jumlah berbeza untuk setiap ahli</div>
+          </div>
+          <div class="split-option" onclick="selectSplit('percent')" id="split-opt-percent">
+            <div class="split-option-title">📊 Peratusan (%)</div>
+            <div class="split-option-desc">Tetapkan peratusan berbeza untuk setiap ahli</div>
+          </div>
+          <div class="split-option" onclick="selectSplit('adjust')" id="split-opt-adjust">
+            <div class="split-option-title">🔧 Pelarasan</div>
+            <div class="split-option-desc">Tetapkan pelarasan tambahan, baki diagihkan sama rata</div>
+          </div>
+        </div>
+        <div id="split-desc" class="alert alert-info" style="font-size:12px;margin-bottom:12px;"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Pengagihan kepada Ahli</label>
+        <div id="split-member-list"></div>
+        <div id="split-validation" class="form-error" style="margin-top:6px;"></div>
+      </div>
+      <div id="split-preview" class="card" style="background:var(--surface2);margin-top:12px;padding:14px;display:none">
+        <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--text-muted);">PRATONTON PENGAGIHAN</div>
+        <div id="split-preview-content"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-expense')">Batal</button>
+      <button class="btn btn-primary" onclick="saveExpense()">Simpan Perbelanjaan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Settlement -->
+<div class="modal-overlay" id="modal-settlement" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Rekod Pembayaran</span>
+      <button class="modal-close" onclick="closeModal('modal-settlement')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="settle-info" style="margin-bottom:16px;padding:12px;background:var(--surface2);border-radius:8px;font-size:13px;"></div>
+      <div class="form-group">
+        <label class="form-label">Jumlah Dibayar</label>
+        <input class="form-input" type="number" id="settle-amount" placeholder="0.00" step="0.01" min="0" />
+        <div class="form-hint" id="settle-hint"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nota (Opsional)</label>
+        <input class="form-input" id="settle-notes" placeholder="Cth: Bayar melalui TNG..." />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-settlement')">Batal</button>
+      <button class="btn btn-olive" onclick="markFullySettled()">Selesai Penuh ✓</button>
+      <button class="btn btn-primary" onclick="savePartialSettlement()">Simpan Pembayaran</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirm Delete -->
+<div class="modal-overlay" id="modal-confirm" style="display:none">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <span class="modal-title">Pengesahan Padam</span>
+      <button class="modal-close" onclick="closeModal('modal-confirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="confirm-message" style="font-size:14px;line-height:1.6;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modal-confirm')">Batal</button>
+      <button class="btn btn-danger" id="confirm-ok-btn">Padam</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ JAVASCRIPT ============================================================ -->
+<script>
+// ================================================================
+// SUPABASE CONFIG
+// ================================================================
+let supabase = null;
+
+function getStoredConfig() {
+  try {
+    const url = localStorage.getItem('ps_sb_url');
+    const key = localStorage.getItem('ps_sb_key');
+    return (url && key) ? { url, key } : null;
+  } catch(e) { return null; }
+}
+
+function saveSupabaseConfig() {
+  const url = document.getElementById('setup-url').value.trim().replace(/\/$/, '');
+  const key = document.getElementById('setup-key').value.trim();
+  if (!url || !url.startsWith('https://')) { showToast('URL tidak sah. Mesti bermula dengan https://', 'error'); return; }
+  if (!key || key.length < 20) { showToast('Anon key tidak sah. Sila semak semula.', 'error'); return; }
+  localStorage.setItem('ps_sb_url', url);
+  localStorage.setItem('ps_sb_key', key);
+  initSupabase(url, key);
+}
+
+function resetConfig() {
+  localStorage.removeItem('ps_sb_url');
+  localStorage.removeItem('ps_sb_key');
+  document.getElementById('setup-url').value = '';
+  document.getElementById('setup-key').value = '';
+  showToast('Konfigurasi dipadam. Sila masukkan semula.', 'info');
+}
+
+function initSupabase(url, key) {
+  try {
+    supabase = window.supabase.createClient(url, key);
+    document.getElementById('setup-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+    loadAllData();
+  } catch(e) {
+    showToast('Gagal sambung ke Supabase. Sila semak URL dan key.', 'error');
+  }
+}
+
+// ================================================================
+// STATE
+// ================================================================
+const STATE = {
+  trips: [],
+  currentTripId: null,
+  currentUserName: null,
+  editingTripId: null,
+  editingExpenseId: null,
+  settlementTarget: null,
+  selectedEmoji: '✈️',
+  splitMethod: 'equal',
+  activeTab: 'expenses',
+  realtimeChannel: null,
+};
+
+const EMOJIS = ['✈️','🏖️','🏔️','🗺️','🚗','🛳️','🏕️','🎡','🌏','🎯','🎪','🍜','🧳','🏝️','⛷️','🎭'];
+const CATEGORY_INFO = {
+  food:      { label: 'Makanan', icon: '🍽️', cls: 'cat-food' },
+  transport: { label: 'Pengangkutan', icon: '🚗', cls: 'cat-transport' },
+  hotel:     { label: 'Penginapan', icon: '🏨', cls: 'cat-hotel' },
+  activity:  { label: 'Aktiviti', icon: '🎟️', cls: 'cat-activity' },
+  shopping:  { label: 'Membeli-belah', icon: '🛒', cls: 'cat-shopping' },
+  medical:   { label: 'Perubatan', icon: '🏥', cls: 'cat-medical' },
+  other:     { label: 'Lain-lain', icon: '📦', cls: 'cat-other' },
+};
+const MEMBER_COLORS = ['#800020','#6B7A2A','#1D4ED8','#7C3AED','#B45309','#0F766E','#C2410C','#BE185D','#1E40AF','#065F46'];
+
+// ================================================================
+// UTILITIES
+// ================================================================
+function showLoading(show) { document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none'; }
+function fmt(amount, currency) {
+  const n = parseFloat(amount) || 0;
+  if (['JPY','KRW','IDR'].includes(currency)) return `${currency} ${Math.round(n).toLocaleString()}`;
+  return `${currency} ${n.toFixed(2)}`;
+}
+function today() { return new Date().toISOString().split('T')[0]; }
+function formatDate(d) {
+  if (!d) return '';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('ms-MY', { day:'numeric', month:'short', year:'numeric' });
+}
+function hashPassword(p) {
+  let h = 0;
+  for (let i = 0; i < p.length; i++) { h = ((h << 5) - h) + p.charCodeAt(i); h |= 0; }
+  return 'h_' + Math.abs(h).toString(36) + '_' + p.length;
+}
+function memberColor(idx) { return MEMBER_COLORS[idx % MEMBER_COLORS.length]; }
+function getInitials(name) { return (name || '?').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase(); }
+function showToast(msg, type='info') {
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.textContent = msg;
+  document.getElementById('toast-container').appendChild(t);
+  setTimeout(() => t.remove(), 3200);
+}
+function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); document.getElementById('sidebar-overlay').classList.toggle('show'); }
+function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('show'); }
+function getTrip(id) { return STATE.trips.find(t => t.id === id); }
+function getTripSession(tripId) {
+  try { return JSON.parse(localStorage.getItem('ps_sessions') || '{}')?.[tripId] || null; } catch(e) { return null; }
+}
+function setTripSession(tripId, name) {
+  try { const s = JSON.parse(localStorage.getItem('ps_sessions') || '{}'); s[tripId] = name; localStorage.setItem('ps_sessions', JSON.stringify(s)); } catch(e) {}
+}
+
+// ================================================================
+// SUPABASE DATA LOADING
+// ================================================================
+async function loadAllData() {
+  showLoading(true);
+  try {
+    const { data: trips, error } = await supabase.from('trips').select('*').order('created_at', { ascending: false });
+    if (error) throw error;
+
+    // Load all related data for each trip
+    const fullTrips = await Promise.all(trips.map(async (trip) => {
+      const [members, expenses, settlements, activityLog] = await Promise.all([
+        supabase.from('members').select('*').eq('trip_id', trip.id).order('created_at'),
+        supabase.from('expenses').select('*, payers(*), splits(*)').eq('trip_id', trip.id).order('expense_date', { ascending: false }),
+        supabase.from('settlements').select('*').eq('trip_id', trip.id).order('created_at'),
+        supabase.from('activity_log').select('*').eq('trip_id', trip.id).order('created_at', { ascending: false }).limit(50),
+      ]);
+      return {
+        ...trip,
+        members: members.data || [],
+        expenses: (expenses.data || []).map(e => ({
+          ...e,
+          payers: e.payers || [],
+          splits: e.splits || [],
+        })),
+        settlements: settlements.data || [],
+        activityLog: activityLog.data || [],
+      };
+    }));
+
+    STATE.trips = fullTrips;
+    setupRealtime();
+    showLoading(false);
+    if (STATE.currentTripId) {
+      renderTripView();
+    } else {
+      showHome();
+    }
+  } catch(e) {
+    showLoading(false);
+    showToast('Gagal memuatkan data: ' + e.message, 'error');
+    // If connection fails, show setup screen again
+    document.getElementById('setup-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+}
+
+// ================================================================
+// REALTIME SUBSCRIPTION
+// ================================================================
+function setupRealtime() {
+  if (STATE.realtimeChannel) {
+    supabase.removeChannel(STATE.realtimeChannel);
+  }
+  STATE.realtimeChannel = supabase
+    .channel('paysync-changes')
+    .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
+      // Reload data on any change from any user
+      loadAllData();
+    })
+    .subscribe();
+}
+
+// ================================================================
+// SIDEBAR RENDER
+// ================================================================
+function renderSidebar() {
+  const el = document.getElementById('sidebar-trips');
+  if (!STATE.trips.length) {
+    el.innerHTML = `<div style="padding:12px 16px;font-size:12px;color:rgba(255,255,255,0.35);">Tiada trip lagi.</div>`;
+    return;
+  }
+  el.innerHTML = STATE.trips.map(t => `
+    <div class="sidebar-trip-item ${t.id === STATE.currentTripId ? 'active' : ''}" onclick="openTrip('${t.id}')">
+      <div class="sidebar-trip-icon">${t.emoji}</div>
+      <div class="sidebar-trip-info">
+        <div class="sidebar-trip-name">${t.name}</div>
+        <div class="sidebar-trip-meta">${(t.members||[]).length} ahli · ${t.default_currency}</div>
+      </div>
+      <span class="sidebar-status-badge ${t.status === 'active' ? 'badge-active' : 'badge-completed'}">${t.status === 'active' ? 'Aktif' : t.status === 'completed' ? 'Selesai' : 'Arkib'}</span>
+    </div>`).join('');
+}
+
+// ================================================================
+// HOME VIEW
+// ================================================================
+function showHome() {
+  STATE.currentTripId = null;
+  STATE.activeTab = 'expenses';
+  document.getElementById('topbar-title').textContent = 'Semua Trip';
+  document.getElementById('topbar-actions').innerHTML = `<button class="btn btn-primary btn-sm" onclick="openNewTripModal()">＋ Trip Baru</button>`;
+  renderSidebar();
+
+  const area = document.getElementById('content-area');
+  if (!STATE.trips.length) {
+    area.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">🗺️</div>
+        <h3>Selamat Datang ke PaySync!</h3>
+        <p>Cipta trip pertama anda untuk mula merekod dan membahagi perbelanjaan bersama rakan.</p>
+        <button class="btn btn-primary" onclick="openNewTripModal()">＋ Cipta Trip Pertama</button>
+      </div>`;
+    return;
+  }
+
+  const totalTrips = STATE.trips.length;
+  const activeTrips = STATE.trips.filter(t=>t.status==='active').length;
+  const totalExp = STATE.trips.reduce((s,t)=>(t.expenses||[]).length+s,0);
+  const totalMembers = STATE.trips.reduce((s,t)=>(t.members||[]).length+s,0);
+
+  area.innerHTML = `
+    <div class="stats-row" style="margin-bottom:20px;">
+      <div class="stat-card"><div class="stat-card-value">${totalTrips}</div><div class="stat-card-label">Jumlah Trip</div></div>
+      <div class="stat-card"><div class="stat-card-value">${activeTrips}</div><div class="stat-card-label">Trip Aktif</div></div>
+      <div class="stat-card"><div class="stat-card-value">${totalExp}</div><div class="stat-card-label">Perbelanjaan</div></div>
+      <div class="stat-card"><div class="stat-card-value">${totalMembers}</div><div class="stat-card-label">Jumlah Ahli</div></div>
+    </div>
+    <div class="card-header"><h2 style="font-size:16px;font-weight:700;">Trip Saya</h2></div>
+    <div class="trips-grid">${STATE.trips.map(renderTripCard).join('')}</div>`;
+}
+
+function renderTripCard(t) {
+  const expenses = t.expenses || [];
+  const members = t.members || [];
+  const currencies = {};
+  expenses.forEach(e => { if (!currencies[e.currency]) currencies[e.currency] = 0; currencies[e.currency] += parseFloat(e.amount)||0; });
+  const currStr = Object.entries(currencies).slice(0,2).map(([c,v])=>fmt(v,c)).join(' · ') || fmt(0, t.default_currency);
+  const statusLabel = t.status === 'active' ? '🟢 Aktif' : t.status === 'completed' ? '✅ Selesai' : '📦 Diarkibkan';
+  return `
+  <div class="trip-card" onclick="openTrip('${t.id}')">
+    <div class="trip-card-header">
+      <div class="trip-card-emoji">${t.emoji}</div>
+      <div class="trip-card-info">
+        <div class="trip-card-name">${t.name}</div>
+        <div class="trip-card-date">${t.date_start ? formatDate(t.date_start) + (t.date_end ? ' — ' + formatDate(t.date_end) : '') : 'Tiada tarikh'}</div>
+      </div>
+    </div>
+    <div class="trip-card-body">
+      <div class="trip-card-stats">
+        <div class="trip-stat"><div class="trip-stat-value">${members.length}</div><div class="trip-stat-label">Ahli</div></div>
+        <div class="trip-stat"><div class="trip-stat-value">${expenses.length}</div><div class="trip-stat-label">Perbelanjaan</div></div>
+        <div class="trip-stat" style="flex:2"><div class="trip-stat-value" style="font-size:13px;">${currStr}</div><div class="trip-stat-label">Jumlah Keseluruhan</div></div>
+      </div>
+      <div class="trip-card-footer">
+        <span style="font-size:12px;color:var(--text-muted);">${statusLabel}${t.password_hash ? ' 🔐' : ''}</span>
+        <div class="trip-card-actions" onclick="event.stopPropagation()">
+          <button class="btn btn-ghost btn-xs" onclick="openEditTripModal('${t.id}')">Edit</button>
+          <button class="btn btn-danger btn-xs" onclick="confirmDeleteTrip('${t.id}')">Padam</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ================================================================
+// TRIP OPEN / PASSWORD GATE
+// ================================================================
+function openTrip(tripId) {
+  const trip = getTrip(tripId);
+  if (!trip) return;
+  closeSidebar();
+  const sessionName = getTripSession(tripId);
+  if (trip.password_hash) {
+    if (sessionName) { STATE.currentTripId = tripId; STATE.currentUserName = sessionName; renderTripView(); return; }
+    document.getElementById('pg-trip-name').textContent = trip.name;
+    document.getElementById('pg-password').value = '';
+    document.getElementById('pg-name').value = STATE.currentUserName || '';
+    document.getElementById('pg-error').style.display = 'none';
+    STATE._pendingTripId = tripId;
+    openModal('modal-password-gate');
+  } else {
+    if (sessionName) { STATE.currentTripId = tripId; STATE.currentUserName = sessionName; renderTripView(); return; }
+    STATE._pendingTripId = tripId;
+    document.getElementById('ni-name').value = STATE.currentUserName || '';
+    openModal('modal-name-input');
+  }
+}
+
+function verifyPassword() {
+  const trip = getTrip(STATE._pendingTripId);
+  const pw = document.getElementById('pg-password').value;
+  const name = document.getElementById('pg-name').value.trim();
+  if (!name) { showToast('Sila masukkan nama anda.', 'error'); return; }
+  if (hashPassword(pw) !== trip.password_hash) { document.getElementById('pg-error').style.display = 'block'; return; }
+  document.getElementById('pg-error').style.display = 'none';
+  setTripSession(STATE._pendingTripId, name);
+  STATE.currentTripId = STATE._pendingTripId;
+  STATE.currentUserName = name;
+  localStorage.setItem('ps_user', name);
+  closeModal('modal-password-gate');
+  renderTripView();
+}
+
+function confirmName() {
+  const name = document.getElementById('ni-name').value.trim();
+  if (!name) { showToast('Sila masukkan nama anda.', 'error'); return; }
+  setTripSession(STATE._pendingTripId, name);
+  STATE.currentTripId = STATE._pendingTripId;
+  STATE.currentUserName = name;
+  localStorage.setItem('ps_user', name);
+  closeModal('modal-name-input');
+  renderTripView();
+}
+
+// ================================================================
+// TRIP VIEW
+// ================================================================
+function renderTripView() {
+  const trip = getTrip(STATE.currentTripId);
+  if (!trip) { showHome(); return; }
+  renderSidebar();
+  document.getElementById('topbar-title').innerHTML = `<span style="font-size:18px;margin-right:6px;">${trip.emoji}</span>${trip.name}`;
+  document.getElementById('topbar-actions').innerHTML = `
+    <button class="btn btn-ghost btn-sm no-print" onclick="openEditTripModal('${trip.id}')">⚙️ Edit Trip</button>
+    <button class="btn btn-ghost btn-sm no-print" onclick="showHome()">← Semua Trip</button>`;
+
+  const expenses = trip.expenses || [];
+  const members = trip.members || [];
+  const settlements = trip.settlements || [];
+  const allDebts = computeSettlements(trip);
+  const totalDebt = Object.values(allDebts).reduce((s,list)=>s+list.reduce((ss,d)=>ss+d.amount,0),0);
+  const totalSettled = settlements.reduce((s,st)=>s+(parseFloat(st.amount_paid)||0),0);
+  const pct = totalDebt > 0 ? Math.min(100, Math.round(totalSettled/totalDebt*100)) : 100;
+
+  document.getElementById('content-area').innerHTML = `
+    <div class="card" style="margin-bottom:20px;background:linear-gradient(135deg,var(--burgundy),var(--burgundy-light));color:#fff;border:none;">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <div style="font-size:36px;">${trip.emoji}</div>
+        <div style="flex:1;min-width:180px;">
+          <div style="font-size:18px;font-weight:800;">${trip.name}</div>
+          <div style="font-size:12px;opacity:0.7;margin-top:2px;">
+            ${trip.date_start ? formatDate(trip.date_start) + (trip.date_end ? ' — ' + formatDate(trip.date_end) : '') : ''}
+            ${trip.password_hash ? ' · 🔐' : ''} · ${members.length} ahli
+          </div>
+          <div style="margin-top:8px;">
+            <div style="font-size:11px;opacity:0.7;margin-bottom:3px;">Progress Settlement: ${pct}%</div>
+            <div class="progress-bar" style="background:rgba(255,255,255,0.2);"><div class="progress-fill" style="width:${pct}%;background:var(--royal-yellow);"></div></div>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px;opacity:0.6;">Pengguna semasa</div>
+          <div style="font-size:14px;font-weight:700;">👤 ${STATE.currentUserName}</div>
+        </div>
+      </div>
+    </div>
+    <div class="tabs no-print">
+      <button class="tab-btn ${STATE.activeTab==='expenses'?'active':''}" onclick="switchTab('expenses')">💸 Perbelanjaan (${expenses.length})</button>
+      <button class="tab-btn ${STATE.activeTab==='members'?'active':''}" onclick="switchTab('members')">👥 Ahli (${members.length})</button>
+      <button class="tab-btn ${STATE.activeTab==='summary'?'active':''}" onclick="switchTab('summary')">📊 Ringkasan</button>
+      <button class="tab-btn ${STATE.activeTab==='transactions'?'active':''}" onclick="switchTab('transactions')">📜 Transaksi</button>
+      <button class="tab-btn ${STATE.activeTab==='dashboard'?'active':''}" onclick="switchTab('dashboard')">📈 Dashboard</button>
+    </div>
+    <div id="tab-content"></div>`;
+  renderTab();
+}
+
+function switchTab(tab) {
+  STATE.activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.toggle('active', b.getAttribute('onclick') === `switchTab('${tab}')`); });
+  renderTab();
+}
+
+function renderTab() {
+  const trip = getTrip(STATE.currentTripId);
+  const tc = document.getElementById('tab-content');
+  if (!tc || !trip) return;
+  switch(STATE.activeTab) {
+    case 'expenses': tc.innerHTML = renderExpensesTab(trip); break;
+    case 'members': tc.innerHTML = renderMembersTab(trip); break;
+    case 'summary': tc.innerHTML = renderSummaryTab(trip); break;
+    case 'transactions': tc.innerHTML = renderTransactionsTab(trip); break;
+    case 'dashboard': tc.innerHTML = renderDashboardTab(trip); break;
+  }
+}
+
+// ================================================================
+// TAB: EXPENSES
+// ================================================================
+function renderExpensesTab(trip) {
+  const expenses = trip.expenses || [];
+  const members = trip.members || [];
+  const myName = STATE.currentUserName;
+  const addBtn = trip.status === 'active'
+    ? `<button class="btn btn-primary no-print" onclick="openAddExpenseModal()">＋ Tambah Perbelanjaan</button>`
+    : `<span class="badge" style="background:var(--surface2);color:var(--text-muted);">Trip tidak aktif</span>`;
+
+  if (!expenses.length) {
+    return `<div style="display:flex;justify-content:flex-end;margin-bottom:12px;">${addBtn}</div>
+      <div class="empty-state" style="padding:40px 20px;">
+        <div class="empty-state-icon">💸</div><h3>Tiada Perbelanjaan</h3>
+        <p>Tambah perbelanjaan pertama untuk trip ini.</p>
+        ${trip.status==='active'?`<button class="btn btn-primary" onclick="openAddExpenseModal()">＋ Tambah</button>`:''}
+      </div>`;
+  }
+
+  const byDate = {};
+  expenses.forEach(e => { const d = e.expense_date || 'Tiada tarikh'; if (!byDate[d]) byDate[d] = []; byDate[d].push(e); });
+  const sortedDates = Object.keys(byDate).sort((a,b) => b.localeCompare(a));
+
+  return `<div style="display:flex;justify-content:flex-end;margin-bottom:12px;" class="no-print">${addBtn}</div>` +
+    sortedDates.map(date => {
+      const dayExp = byDate[date];
+      const dayTotal = {};
+      dayExp.forEach(e => { if (!dayTotal[e.currency]) dayTotal[e.currency]=0; dayTotal[e.currency]+=parseFloat(e.amount)||0; });
+      const dayTotalStr = Object.entries(dayTotal).map(([c,v])=>fmt(v,c)).join(' · ');
+      return `
+      <div style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text-muted);">${date!=='Tiada tarikh'?formatDate(date):date}</div>
+          <div style="flex:1;height:1px;background:var(--border);"></div>
+          <div style="font-size:11px;color:var(--text-muted);">${dayTotalStr}</div>
+        </div>
+        <div class="card" style="padding:0;">${dayExp.map(e=>renderExpenseItem(e,members,myName,trip)).join('')}</div>
+      </div>`;
+    }).join('');
+}
+
+function renderExpenseItem(e, members, myName, trip) {
+  const cat = CATEGORY_INFO[e.category] || CATEGORY_INFO.other;
+  const payers = e.payers || [];
+  const splits = e.splits || [];
+  const mySplit = splits.find(s => s.member_name === myName);
+  const myPay = payers.find(p => p.member_name === myName);
+  let myNetClass = '', myNetLabel = '';
+  if (mySplit || myPay) {
+    const paid = parseFloat(myPay?.amount||0), owed = parseFloat(mySplit?.amount||0);
+    const net = paid - owed;
+    if (net > 0.001) { myNetClass='lend'; myNetLabel=`+${fmt(net,e.currency)} (Memberi pinjam)`; }
+    else if (net < -0.001) { myNetClass='owe'; myNetLabel=`${fmt(Math.abs(net),e.currency)} (Berhutang)`; }
+    else if (mySplit) { myNetLabel='Selesai'; }
+  }
+  const payerNames = payers.map(p=>`${p.member_name} (${fmt(p.amount,e.currency)})`).join(', ');
+  const canEdit = trip.status === 'active';
+  return `
+  <div class="expense-item">
+    <div class="expense-icon">${cat.icon}</div>
+    <div class="expense-details">
+      <div class="expense-name">${e.description}</div>
+      <div class="expense-meta">
+        <span class="badge badge-category ${cat.cls}">${cat.icon} ${cat.label}</span>
+        · Bayar: ${payerNames} · ${splitMethodLabel(e.split_method)}
+        ${e.notes?`· <em>${e.notes}</em>`:''}
+      </div>
+      ${myNetLabel?`<div style="font-size:11px;font-weight:700;margin-top:4px;color:${myNetClass==='owe'?'var(--red)':'var(--green)'};">${myNetLabel}</div>`:''}
+      <div class="expense-actions no-print">
+        ${canEdit?`<button class="btn btn-ghost btn-xs" onclick="openEditExpenseModal('${e.id}')">✏️ Edit</button>`:''}
+        ${canEdit?`<button class="btn btn-danger btn-xs" onclick="confirmDeleteExpense('${e.id}')">🗑️ Padam</button>`:''}
+        <button class="btn btn-ghost btn-xs" onclick="toggleExpenseDetail('${e.id}')">👁️ Detail</button>
+      </div>
+      <div id="exp-detail-${e.id}" style="display:none;margin-top:8px;padding:8px;background:var(--surface2);border-radius:8px;font-size:12px;">
+        ${splits.map(s=>`<div style="display:flex;justify-content:space-between;padding:3px 0;color:${s.member_name===myName?'var(--burgundy)':'inherit'};font-weight:${s.member_name===myName?'700':'400'};"><span>${s.member_name}</span><span>${fmt(s.amount,e.currency)}</span></div>`).join('')}
+      </div>
+    </div>
+    <div class="expense-amount">
+      <div class="expense-total" style="color:var(--burgundy);">${fmt(e.amount,e.currency)}</div>
+      <div style="font-size:10px;color:var(--text-muted);">${e.expense_date?formatDate(e.expense_date):''}</div>
+    </div>
+  </div>`;
+}
+
+function toggleExpenseDetail(id) { const el = document.getElementById(`exp-detail-${id}`); if(el) el.style.display = el.style.display==='none'?'block':'none'; }
+function splitMethodLabel(m) { return {equal:'Sama Rata',exact:'Jumlah Tepat',percent:'Peratusan',adjust:'Pelarasan'}[m]||m; }
+
+// ================================================================
+// TAB: MEMBERS
+// ================================================================
+function renderMembersTab(trip) {
+  const members = trip.members || [];
+  const expenses = trip.expenses || [];
+  const memberStats = members.map((m,i) => {
+    const totalPaid={}, totalOwed={};
+    expenses.forEach(e => {
+      (e.payers||[]).forEach(p=>{ if(p.member_name===m.name){if(!totalPaid[e.currency])totalPaid[e.currency]=0;totalPaid[e.currency]+=parseFloat(p.amount)||0;} });
+      (e.splits||[]).forEach(s=>{ if(s.member_name===m.name){if(!totalOwed[e.currency])totalOwed[e.currency]=0;totalOwed[e.currency]+=parseFloat(s.amount)||0;} });
+    });
+    const paidStr = Object.entries(totalPaid).map(([c,v])=>fmt(v,c)).join(', ')||fmt(0,trip.default_currency);
+    const owedStr = Object.entries(totalOwed).map(([c,v])=>fmt(v,c)).join(', ')||fmt(0,trip.default_currency);
+    return {...m,paidStr,owedStr,idx:i};
+  });
+
+  return `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px;" class="no-print">
+      ${trip.status==='active'?`<button class="btn btn-primary" onclick="openAddMemberModal()">＋ Tambah Ahli</button>`:''}
+    </div>
+    ${!members.length?`<div class="empty-state" style="padding:40px 20px;"><div class="empty-state-icon">👥</div><h3>Tiada Ahli</h3><p>Tambah ahli yang menyertai trip ini.</p></div>`:''}
+    <div class="trips-grid">
+      ${memberStats.map(m=>`
+        <div class="card">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+            <div class="member-avatar" style="background:${memberColor(m.idx)};width:44px;height:44px;font-size:16px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;">${getInitials(m.name)}</div>
+            <div style="flex:1;">
+              <div style="font-weight:700;font-size:15px;">${m.name}${m.name===STATE.currentUserName?' <span style="font-size:11px;color:var(--olive);">(Anda)</span>':''}</div>
+              <div style="font-size:11px;color:var(--text-muted);">Ahli sejak ${formatDate(m.joined_at)}</div>
+            </div>
+            ${trip.status==='active'?`<button class="btn btn-danger btn-xs no-print" onclick="confirmDeleteMember('${m.id}')">✕</button>`:''}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div style="background:var(--green-light);padding:10px;border-radius:8px;text-align:center;">
+              <div style="font-size:11px;color:var(--green);font-weight:700;">Jumlah Bayar</div>
+              <div style="font-size:13px;font-weight:800;color:var(--green);">${m.paidStr}</div>
+            </div>
+            <div style="background:var(--red-light);padding:10px;border-radius:8px;text-align:center;">
+              <div style="font-size:11px;color:var(--red);font-weight:700;">Jumlah Tanggungan</div>
+              <div style="font-size:13px;font-weight:800;color:var(--red);">${m.owedStr}</div>
+            </div>
+          </div>
+        </div>`).join('')}
+    </div>`;
+}
+
+// ================================================================
+// SETTLEMENT ALGORITHM
+// ================================================================
+function computeSettlements(trip) {
+  const expenses = trip.expenses||[], settlements = trip.settlements||[];
+  const net = {};
+  expenses.forEach(e => {
+    const c = e.currency;
+    if (!net[c]) net[c]={};
+    (e.payers||[]).forEach(p=>{if(!net[c][p.member_name])net[c][p.member_name]=0;net[c][p.member_name]+=parseFloat(p.amount)||0;});
+    (e.splits||[]).forEach(s=>{if(!net[c][s.member_name])net[c][s.member_name]=0;net[c][s.member_name]-=parseFloat(s.amount)||0;});
+  });
+  settlements.forEach(st=>{
+    const c=st.currency;
+    if(!net[c])net[c]={};
+    if(!net[c][st.from_member])net[c][st.from_member]=0;
+    if(!net[c][st.to_member])net[c][st.to_member]=0;
+    net[c][st.from_member]+=parseFloat(st.amount_paid)||0;
+    net[c][st.to_member]-=parseFloat(st.amount_paid)||0;
+  });
+  const debts={};
+  Object.entries(net).forEach(([currency,balances])=>{
+    const creditors=[], debtors=[];
+    Object.entries(balances).forEach(([name,bal])=>{
+      if(bal>0.005)creditors.push({name,amount:bal});
+      else if(bal<-0.005)debtors.push({name,amount:-bal});
+    });
+    creditors.sort((a,b)=>b.amount-a.amount); debtors.sort((a,b)=>b.amount-a.amount);
+    const result=[]; let ci=0,di=0;
+    while(ci<creditors.length&&di<debtors.length){
+      const c=creditors[ci],d=debtors[di];
+      const pay=Math.min(c.amount,d.amount);
+      if(pay>0.005)result.push({from:d.name,to:c.name,amount:pay});
+      c.amount-=pay; d.amount-=pay;
+      if(c.amount<0.005)ci++; if(d.amount<0.005)di++;
+    }
+    if(result.length)debts[currency]=result;
+  });
+  return debts;
+}
+
+// ================================================================
+// TAB: SUMMARY
+// ================================================================
+function renderSummaryTab(trip) {
+  const debts = computeSettlements(trip);
+  const myName = STATE.currentUserName;
+  if (!Object.keys(debts).length) {
+    return `<div class="alert alert-success">✅ Semua penghutang telah dijelaskan!</div>${renderSettlementHistory(trip)}`;
+  }
+  let html = '';
+  Object.entries(debts).forEach(([currency,list])=>{
+    html += `<div class="currency-section-header"><span>${currency}</span><div class="currency-divider"></div></div><div style="margin-bottom:16px;">`;
+    html += list.map((d,i)=>{
+      const isMe=d.from===myName, isMine=d.to===myName;
+      const cls=isMe?'owe':isMine?'lend':'';
+      return `
+      <div class="settlement-item ${cls}">
+        <div style="width:32px;height:32px;border-radius:8px;background:${memberColor(i)};display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0;">${getInitials(d.from)}</div>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;">${d.from} <span style="font-weight:400;color:var(--text-muted);">perlu bayar</span> ${d.to}</div>
+          ${isMe?'<div style="font-size:11px;color:var(--red);">⚠️ Anda yang berhutang</div>':isMine?'<div style="font-size:11px;color:var(--green);">💚 Orang ini berhutang dengan anda</div>':''}
+        </div>
+        <div class="settlement-amount ${cls}">${fmt(d.amount,currency)}</div>
+        <button class="btn btn-sm ${isMe?'btn-primary':'btn-olive'} no-print" onclick="openSettlementModal('${d.from}','${d.to}','${currency}',${d.amount})">${isMe?'💳 Bayar':'✓ Rekod'}</button>
+      </div>`;
+    }).join('') + '</div>';
+  });
+  return html + renderSettlementHistory(trip);
+}
+
+function renderSettlementHistory(trip) {
+  const settlements = trip.settlements||[];
+  if(!settlements.length) return '';
+  return `<div class="card" style="margin-top:16px;">
+    <div class="card-header"><div class="card-title">📋 Sejarah Pembayaran</div></div>
+    ${settlements.map(s=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">
+        <div>✅</div>
+        <div style="flex:1;">${s.from_member} → ${s.to_member} · <strong>${fmt(s.amount_paid,s.currency)}</strong>${s.notes?` · ${s.notes}`:''}</div>
+        <div style="color:var(--text-muted);">${formatDate(s.settle_date)}</div>
+        <button class="btn btn-danger btn-xs no-print" onclick="deleteSettlement('${s.id}')">✕</button>
+      </div>`).join('')}
+  </div>`;
+}
+
+// ================================================================
+// TAB: TRANSACTIONS
+// ================================================================
+function renderTransactionsTab(trip) {
+  const expenses=trip.expenses||[], settlements=trip.settlements||[];
+  const allTx=[
+    ...expenses.map(e=>({type:'expense',date:e.expense_date||e.created_at,data:e})),
+    ...settlements.map(s=>({type:'settlement',date:s.settle_date||s.created_at,data:s})),
+  ].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
+  const totals={};
+  expenses.forEach(e=>{if(!totals[e.currency])totals[e.currency]=0;totals[e.currency]+=parseFloat(e.amount)||0;});
+
+  return `
+  <div class="print-btn-area no-print"><button class="btn btn-olive" onclick="window.print()">🖨️ Cetak / Eksport PDF</button></div>
+  <div class="card" id="print-report">
+    <div class="card-header">
+      <div class="card-title">📜 Log Transaksi — ${trip.name}</div>
+      <div style="font-size:12px;color:var(--text-muted);">${expenses.length} perbelanjaan · ${settlements.length} pembayaran</div>
+    </div>
+    <div style="font-size:12px;margin-bottom:12px;color:var(--text-muted);">Dicetak: ${new Date().toLocaleString('ms-MY')}</div>
+    ${!allTx.length?'<div style="text-align:center;color:var(--text-muted);padding:20px;">Tiada transaksi.</div>':''}
+    ${allTx.map(tx=>{
+      if(tx.type==='expense'){
+        const e=tx.data, cat=CATEGORY_INFO[e.category]||CATEGORY_INFO.other;
+        const payerStr=(e.payers||[]).map(p=>`${p.member_name}: ${fmt(p.amount,e.currency)}`).join(', ');
+        const splitStr=(e.splits||[]).map(s=>`${s.member_name}: ${fmt(s.amount,e.currency)}`).join(', ');
+        return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;">
+            <div>
+              <div style="font-weight:700;">${cat.icon} ${e.description}</div>
+              <div style="color:var(--text-muted);font-size:11px;margin-top:2px;">${formatDate(e.expense_date)} · ${cat.label} · ${splitMethodLabel(e.split_method)}</div>
+              <div style="margin-top:4px;">Payer: ${payerStr}</div>
+              <div style="margin-top:2px;">Pembahagian: ${splitStr}</div>
+              ${e.notes?`<div style="margin-top:2px;font-style:italic;color:var(--text-muted);">Nota: ${e.notes}</div>`:''}
+            </div>
+            <div style="font-weight:800;font-size:15px;color:var(--burgundy);">${fmt(e.amount,e.currency)}</div>
+          </div>
+        </div>`;
+      } else {
+        const s=tx.data;
+        return `<div style="border:1px solid var(--green);border-radius:8px;padding:12px;margin-bottom:8px;background:var(--green-light);">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+            <div>
+              <div style="font-weight:700;color:var(--green);">✅ Pembayaran Hutang</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">${formatDate(s.settle_date)}${s.notes?` · ${s.notes}`:''}</div>
+              <div style="margin-top:4px;">${s.from_member} → ${s.to_member}</div>
+            </div>
+            <div style="font-weight:800;font-size:15px;color:var(--green);">${fmt(s.amount_paid,s.currency)}</div>
+          </div>
+        </div>`;
+      }
+    }).join('')}
+    <div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--border);">
+      <div style="font-weight:700;margin-bottom:8px;">JUMLAH KESELURUHAN</div>
+      ${Object.entries(totals).map(([c,v])=>`<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;margin-bottom:4px;"><span>${c}</span><span style="color:var(--burgundy);">${fmt(v,c)}</span></div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ================================================================
+// TAB: DASHBOARD
+// ================================================================
+function renderDashboardTab(trip) {
+  const expenses=trip.expenses||[], members=trip.members||[];
+  if(!expenses.length) return `<div class="empty-state"><div class="empty-state-icon">📈</div><h3>Tiada Data</h3><p>Tambah perbelanjaan untuk melihat analisis.</p></div>`;
+
+  const byCurrency={};
+  expenses.forEach(e=>{if(!byCurrency[e.currency])byCurrency[e.currency]=0;byCurrency[e.currency]+=parseFloat(e.amount)||0;});
+
+  const byCat={};
+  expenses.forEach(e=>{if(!byCat[e.category])byCat[e.category]={};if(!byCat[e.category][e.currency])byCat[e.category][e.currency]=0;byCat[e.category][e.currency]+=parseFloat(e.amount)||0;});
+
+  const byMember={};
+  expenses.forEach(e=>{(e.payers||[]).forEach(p=>{if(!byMember[p.member_name])byMember[p.member_name]={};if(!byMember[p.member_name][e.currency])byMember[p.member_name][e.currency]=0;byMember[p.member_name][e.currency]+=parseFloat(p.amount)||0;});});
+
+  const mainCur=trip.default_currency;
+  const catChartData=Object.entries(byCat).map(([cat,curMap])=>({cat,amount:curMap[mainCur]||Object.values(curMap)[0]||0,currency:curMap[mainCur]?mainCur:Object.keys(curMap)[0]})).filter(d=>d.amount>0).sort((a,b)=>b.amount-a.amount);
+  const maxCat=catChartData[0]?.amount||1;
+  const memberChartData=Object.entries(byMember).map(([name,curMap])=>({name,amount:curMap[mainCur]||Object.values(curMap)[0]||0,currency:curMap[mainCur]?mainCur:Object.keys(curMap)[0]})).filter(d=>d.amount>0).sort((a,b)=>b.amount-a.amount);
+  const maxMember=memberChartData[0]?.amount||1;
+  const catColors=['#800020','#6B7A2A','#F5C518','#1D4ED8','#7C3AED','#B45309','#0F766E'];
+
+  const debts=computeSettlements(trip);
+  const totalDebtAmt=Object.values(debts).reduce((s,list)=>s+list.reduce((ss,d)=>ss+d.amount,0),0);
+  const totalSettledAmt=(trip.settlements||[]).reduce((s,st)=>s+(parseFloat(st.amount_paid)||0),0);
+  const settledPct=totalDebtAmt>0?Math.min(100,Math.round(totalSettledAmt/totalDebtAmt*100)):100;
+
+  return `
+  <div class="stats-row">
+    ${Object.entries(byCurrency).map(([c,v])=>`<div class="stat-card"><div class="stat-card-value" style="font-size:16px;">${fmt(v,c)}</div><div class="stat-card-label">Jumlah ${c}</div></div>`).join('')}
+    <div class="stat-card"><div class="stat-card-value">${expenses.length}</div><div class="stat-card-label">Perbelanjaan</div></div>
+    <div class="stat-card"><div class="stat-card-value">${members.length}</div><div class="stat-card-label">Ahli</div></div>
+  </div>
+  <div class="card" style="margin-bottom:16px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <div style="font-weight:700;font-size:13px;">Progress Settlement</div>
+      <div style="font-size:13px;font-weight:800;color:var(--olive);">${settledPct}%</div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${settledPct}%;"></div></div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:6px;">${settledPct===100?'Semua hutang telah dijelaskan! ✅':'Sebahagian hutang masih belum diselesaikan.'}</div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px;">🥧 Ikut Kategori</div>
+      <div class="chart-container">
+        ${catChartData.map((d,i)=>{const info=CATEGORY_INFO[d.cat]||CATEGORY_INFO.other;const pct=Math.round(d.amount/maxCat*100);return`<div class="chart-bar-wrap"><div class="chart-bar-label" title="${info.label}">${info.icon} ${info.label}</div><div class="chart-bar-track"><div class="chart-bar-fill" style="width:${pct}%;background:${catColors[i%catColors.length]};">${pct>15?fmt(d.amount,d.currency):''}</div></div><div class="chart-bar-value">${fmt(d.amount,d.currency)}</div></div>`;}).join('')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title" style="margin-bottom:12px;">👥 Ikut Ahli</div>
+      <div class="chart-container">
+        ${memberChartData.map((d,i)=>{const pct=Math.round(d.amount/maxMember*100);return`<div class="chart-bar-wrap"><div class="chart-bar-label" title="${d.name}">${d.name}</div><div class="chart-bar-track"><div class="chart-bar-fill" style="width:${pct}%;background:${memberColor(i)};">${pct>15?fmt(d.amount,d.currency):''}</div></div><div class="chart-bar-value">${fmt(d.amount,d.currency)}</div></div>`;}).join('')}
+      </div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px;">
+    <div class="card-title" style="margin-bottom:12px;">📋 Log Aktiviti</div>
+    ${(trip.activityLog||[]).length===0?'<div style="color:var(--text-muted);font-size:12px;">Tiada aktiviti.</div>':''}
+    ${(trip.activityLog||[]).slice(0,20).map(a=>`<div class="activity-item"><div class="activity-dot"></div><div style="flex:1;">${a.description}</div><div class="activity-time">${new Date(a.created_at).toLocaleString('ms-MY')}</div></div>`).join('')}
+  </div>`;
+}
+
+// ================================================================
+// TRIP CRUD (Supabase)
+// ================================================================
+function openNewTripModal() {
+  STATE.editingTripId = null;
+  document.getElementById('modal-trip-title').textContent = 'Trip Baru';
+  document.getElementById('trip-name').value = '';
+  document.getElementById('trip-password').value = '';
+  document.getElementById('trip-date-start').value = today();
+  document.getElementById('trip-date-end').value = '';
+  document.getElementById('trip-currency').value = 'RM';
+  document.getElementById('trip-status').value = 'active';
+  document.getElementById('trip-emoji-custom').value = '';
+  STATE.selectedEmoji = '✈️';
+  renderEmojiPicker();
+  openModal('modal-trip');
+}
+
+function openEditTripModal(id) {
+  const t = getTrip(id);
+  if (!t) return;
+  STATE.editingTripId = id;
+  document.getElementById('modal-trip-title').textContent = 'Edit Trip';
+  document.getElementById('trip-name').value = t.name;
+  document.getElementById('trip-password').value = '';
+  document.getElementById('trip-date-start').value = t.date_start || '';
+  document.getElementById('trip-date-end').value = t.date_end || '';
+  document.getElementById('trip-currency').value = t.default_currency || 'RM';
+  document.getElementById('trip-status').value = t.status || 'active';
+  document.getElementById('trip-emoji-custom').value = '';
+  STATE.selectedEmoji = t.emoji || '✈️';
+  renderEmojiPicker();
+  openModal('modal-trip');
+}
+
+function renderEmojiPicker() {
+  const el = document.getElementById('emoji-picker');
+  el.innerHTML = EMOJIS.map(e=>`<div onclick="selectEmoji('${e}')" style="cursor:pointer;font-size:22px;padding:6px;border-radius:8px;border:2px solid ${e===STATE.selectedEmoji?'var(--burgundy)':'transparent'};background:${e===STATE.selectedEmoji?'#FFF0F3':'transparent'};transition:all 0.1s;">${e}</div>`).join('');
+}
+function selectEmoji(e) { STATE.selectedEmoji=e; document.getElementById('trip-emoji-custom').value=''; renderEmojiPicker(); }
+
+async function saveTrip() {
+  const name = document.getElementById('trip-name').value.trim();
+  if (!name) { showToast('Nama trip tidak boleh kosong.', 'error'); return; }
+  const customEmoji = document.getElementById('trip-emoji-custom').value.trim();
+  const emoji = customEmoji || STATE.selectedEmoji;
+  const pw = document.getElementById('trip-password').value;
+  const date_start = document.getElementById('trip-date-start').value || null;
+  const date_end = document.getElementById('trip-date-end').value || null;
+  const default_currency = document.getElementById('trip-currency').value;
+  const status = document.getElementById('trip-status').value;
+
+  showLoading(true);
+  try {
+    if (STATE.editingTripId) {
+      const updates = { name, emoji, date_start, date_end, default_currency, status };
+      if (pw) updates.password_hash = hashPassword(pw);
+      const { error } = await supabase.from('trips').update(updates).eq('id', STATE.editingTripId);
+      if (error) throw error;
+      await logActivityDB(STATE.editingTripId, `${STATE.currentUserName||'Seseorang'} mengemaskini maklumat trip.`);
+      showToast('Trip dikemaskini.', 'success');
+    } else {
+      const { data, error } = await supabase.from('trips').insert([{
+        name, emoji, date_start, date_end, default_currency, status,
+        password_hash: pw ? hashPassword(pw) : null,
+      }]).select().single();
+      if (error) throw error;
+      await logActivityDB(data.id, `Trip "${name}" dicipta.`);
+      showToast('Trip baru dicipta! 🎉', 'success');
+    }
+    closeModal('modal-trip');
+    await loadAllData();
+  } catch(e) {
+    showLoading(false);
+    showToast('Ralat: ' + e.message, 'error');
+  }
+}
+
+async function confirmDeleteTrip(id) {
+  const t = getTrip(id);
+  document.getElementById('confirm-message').innerHTML = `Adakah anda pasti ingin <strong>memadam trip "${t.name}"</strong>?<br><span style="color:var(--red);font-size:12px;">Semua data akan dipadam secara kekal.</span>`;
+  document.getElementById('confirm-ok-btn').onclick = async () => {
+    closeModal('modal-confirm');
+    showLoading(true);
+    try {
+      const { error } = await supabase.from('trips').delete().eq('id', id);
+      if (error) throw error;
+      showToast('Trip dipadam.', 'info');
+      if (STATE.currentTripId === id) STATE.currentTripId = null;
+      await loadAllData();
+    } catch(e) { showLoading(false); showToast('Ralat: '+e.message,'error'); }
+  };
+  openModal('modal-confirm');
+}
+
+// ================================================================
+// MEMBER CRUD (Supabase)
+// ================================================================
+function openAddMemberModal() {
+  document.getElementById('modal-member-title').textContent = 'Tambah Ahli';
+  document.getElementById('member-name').value = '';
+  document.getElementById('member-retroactive').checked = false;
+  const trip = getTrip(STATE.currentTripId);
+  document.getElementById('member-retroactive-section').style.display = (trip.expenses||[]).length>0?'block':'none';
+  updateRetroLabel();
+  openModal('modal-member');
+}
+
+function updateRetroLabel() {
+  const chk = document.getElementById('member-retroactive');
+  document.getElementById('member-retroactive-label').textContent = chk.checked
+    ? 'Ya — Libatkan dalam semua perbelanjaan sedia ada'
+    : 'Tidak — Hanya libatkan dalam perbelanjaan baru sahaja';
+}
+document.getElementById('member-retroactive').addEventListener('change', updateRetroLabel);
+
+async function saveMember() {
+  const name = document.getElementById('member-name').value.trim();
+  if (!name) { showToast('Nama ahli tidak boleh kosong.', 'error'); return; }
+  const trip = getTrip(STATE.currentTripId);
+  if (!trip) return;
+  if ((trip.members||[]).some(m=>m.name.toLowerCase()===name.toLowerCase())) { showToast('Ahli dengan nama ini sudah ada.', 'error'); return; }
+
+  const retroactive = document.getElementById('member-retroactive').checked;
+  showLoading(true);
+  try {
+    const { error } = await supabase.from('members').insert([{ trip_id: STATE.currentTripId, name, joined_at: today() }]);
+    if (error) throw error;
+
+    if (retroactive && (trip.expenses||[]).length > 0) {
+      for (const exp of trip.expenses) {
+        const allMembers = [...(exp.splits||[]).map(s=>s.member_name), name];
+        const newShare = parseFloat(exp.amount) / allMembers.length;
+        await supabase.from('splits').delete().eq('expense_id', exp.id);
+        await supabase.from('splits').insert(allMembers.map(mn=>({ expense_id: exp.id, member_name: mn, amount: +newShare.toFixed(2) })));
+        await supabase.from('expenses').update({ split_method: 'equal' }).eq('id', exp.id);
+      }
+    }
+
+    await logActivityDB(STATE.currentTripId, `${STATE.currentUserName||'Seseorang'} menambah ahli "${name}"${retroactive?' (termasuk perbelanjaan lama)':''}.`);
+    showToast(`Ahli "${name}" ditambah.`, 'success');
+    closeModal('modal-member');
+    await loadAllData();
+  } catch(e) { showLoading(false); showToast('Ralat: '+e.message,'error'); }
+}
+
+async function confirmDeleteMember(id) {
+  const trip = getTrip(STATE.currentTripId);
+  const m = (trip.members||[]).find(m=>m.id===id);
+  if (!m) return;
+  document.getElementById('confirm-message').innerHTML = `Adakah anda pasti ingin <strong>memadam ahli "${m.name}"</strong>?`;
+  document.getElementById('confirm-ok-btn').onclick = async () => {
+    closeModal('modal-confirm');
+    showLoading(true);
+    try {
+      const { error } = await supabase.from('members').delete().eq('id', id);
+      if (error) throw error;
+      await logActivityDB(STATE.currentTripId, `${STATE.currentUserName||'Seseorang'} memadam ahli "${m.name}".`);
+      showToast('Ahli dipadam.', 'info');
+      await loadAllData();
+    } catch(e) { showLoading(false); showToast('Ralat: '+e.message,'error'); }
+  };
+  openModal('modal-confirm');
+}
+
+// ================================================================
+// EXPENSE FORM (Supabase)
+// ================================================================
+function openAddExpenseModal() {
+  const trip = getTrip(STATE.currentTripId);
+  if (!trip||!(trip.members||[]).length) { showToast('Sila tambah sekurang-kurangnya 1 ahli terlebih dahulu.','error'); return; }
+  STATE.editingExpenseId = null;
+  STATE.splitMethod = 'equal';
+  document.getElementById('modal-expense-title').textContent = 'Tambah Perbelanjaan';
+  document.getElementById('exp-desc').value = '';
+  document.getElementById('exp-date').value = today();
+  document.getElementById('exp-amount').value = '';
+  document.getElementById('exp-currency').value = trip.default_currency||'RM';
+  document.getElementById('exp-currency-custom').style.display = 'none';
+  document.getElementById('exp-category').value = 'food';
+  document.getElementById('exp-notes').value = '';
+  selectSplit('equal');
+  renderPayerList(trip, []);
+  renderSplitMemberList(trip, []);
+  document.getElementById('split-preview').style.display = 'none';
+  openModal('modal-expense');
+}
+
+function openEditExpenseModal(expId) {
+  const trip = getTrip(STATE.currentTripId);
+  const exp = (trip.expenses||[]).find(e=>e.id===expId);
+  if (!exp) return;
+  STATE.editingExpenseId = expId;
+  STATE.splitMethod = exp.split_method||'equal';
+  document.getElementById('modal-expense-title').textContent = 'Edit Perbelanjaan';
+  document.getElementById('exp-desc').value = exp.description;
+  document.getElementById('exp-date').value = exp.expense_date||today();
+  document.getElementById('exp-amount').value = exp.amount;
+  document.getElementById('exp-notes').value = exp.notes||'';
+  const knownCurrencies=['RM','USD','SGD','JPY','THB','IDR','EUR','GBP','AUD','KRW'];
+  if(knownCurrencies.includes(exp.currency)){document.getElementById('exp-currency').value=exp.currency;document.getElementById('exp-currency-custom').style.display='none';}
+  else{document.getElementById('exp-currency').value='OTHER';document.getElementById('exp-currency-custom').style.display='block';document.getElementById('exp-currency-custom').value=exp.currency;}
+  document.getElementById('exp-category').value=exp.category||'other';
+  selectSplit(exp.split_method||'equal',false);
+  renderPayerList(trip,exp.payers||[]);
+  renderSplitMemberList(trip,exp.splits||[]);
+  updateExpensePreview();
+  openModal('modal-expense');
+}
+
+function toggleCustomCurrency() {
+  document.getElementById('exp-currency-custom').style.display = document.getElementById('exp-currency').value==='OTHER'?'block':'none';
+}
+
+function selectSplit(method, reset=true) {
+  STATE.splitMethod=method;
+  ['equal','exact','percent','adjust'].forEach(m=>document.getElementById(`split-opt-${m}`)?.classList.toggle('selected',m===method));
+  const descs={equal:'⚖️ Jumlah dibahagikan sama rata.',exact:'🎯 Masukkan jumlah tepat bagi setiap ahli.',percent:'📊 Masukkan peratusan (%) bagi setiap ahli. Jumlah mesti 100%.',adjust:'🔧 Masukkan pelarasan untuk setiap ahli. Baki diagihkan sama rata.'};
+  document.getElementById('split-desc').textContent=descs[method];
+  const trip=getTrip(STATE.currentTripId);
+  if(trip){
+    const exp=STATE.editingExpenseId?(trip.expenses||[]).find(e=>e.id===STATE.editingExpenseId):null;
+    renderSplitMemberList(trip,reset?[]:(exp?.splits||[]));
+  }
+  updateExpensePreview();
+}
+
+function renderPayerList(trip, existingPayers) {
+  const members=trip.members||[];
+  document.getElementById('payer-list').innerHTML=members.map(m=>{
+    const existing=existingPayers.find(p=>p.member_name===m.name);
+    return `<div class="payer-row">
+      <input type="checkbox" class="payer-check" id="payer-chk-${m.id}" ${existing?'checked':''} onchange="updatePayerAmounts()" />
+      <div style="width:28px;height:28px;border-radius:6px;background:${memberColor(trip.members.indexOf(m))};display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0;">${getInitials(m.name)}</div>
+      <label for="payer-chk-${m.id}" style="flex:1;font-size:13px;cursor:pointer;">${m.name}</label>
+      <input type="number" class="form-input" id="payer-amt-${m.id}" placeholder="Jumlah" style="width:110px;font-size:12px;" value="${existing?existing.amount:''}" step="0.01" min="0" oninput="updateExpensePreview()" />
+    </div>`;
+  }).join('');
+}
+
+function updatePayerAmounts() {
+  const trip=getTrip(STATE.currentTripId);
+  const totalAmt=parseFloat(document.getElementById('exp-amount').value)||0;
+  const checked=(trip.members||[]).filter(m=>document.getElementById(`payer-chk-${m.id}`)?.checked);
+  if(!checked.length)return;
+  const share=totalAmt/checked.length;
+  checked.forEach(m=>{const inp=document.getElementById(`payer-amt-${m.id}`);if(inp&&!inp.value)inp.value=share.toFixed(2);});
+  updateExpensePreview();
+}
+
+function renderSplitMemberList(trip, existingSplits) {
+  const members=trip.members||[];
+  const totalAmt=parseFloat(document.getElementById('exp-amount').value)||0;
+  document.getElementById('split-member-list').innerHTML=members.map((m,idx)=>{
+    const existing=existingSplits.find(s=>s.member_name===m.name);
+    let inputHtml='';
+    if(STATE.splitMethod==='equal'){inputHtml=`<span style="font-size:13px;font-weight:700;color:var(--burgundy);" id="split-eq-${m.id}">${fmt(totalAmt/(members.length||1),getCurrency())}</span>`;}
+    else if(STATE.splitMethod==='exact'){inputHtml=`<input type="number" class="form-input" id="split-inp-${m.id}" placeholder="0.00" style="width:110px;font-size:12px;" value="${existing?existing.amount:''}" step="0.01" min="0" oninput="updateExpensePreview()" />`;}
+    else if(STATE.splitMethod==='percent'){inputHtml=`<div style="display:flex;align-items:center;gap:4px;"><input type="number" class="form-input" id="split-inp-${m.id}" placeholder="0" style="width:80px;font-size:12px;" value="${existing?existing.amount:''}" step="1" min="0" max="100" oninput="updateExpensePreview()" /><span style="font-size:13px;">%</span></div>`;}
+    else if(STATE.splitMethod==='adjust'){inputHtml=`<div style="display:flex;align-items:center;gap:4px;"><input type="number" class="form-input" id="split-inp-${m.id}" placeholder="0.00" style="width:110px;font-size:12px;" value="${existing?existing.amount:''}" step="0.01" oninput="updateExpensePreview()" /><span style="font-size:11px;color:var(--text-muted);">adj</span></div>`;}
+    return `<div class="payer-row"><div style="width:28px;height:28px;border-radius:6px;background:${memberColor(idx)};display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;flex-shrink:0;">${getInitials(m.name)}</div><span style="flex:1;font-size:13px;">${m.name}</span>${inputHtml}</div>`;
+  }).join('');
+  updateExpensePreview();
+}
+
+function getCurrency() {
+  const v=document.getElementById('exp-currency')?.value;
+  if(v==='OTHER')return document.getElementById('exp-currency-custom')?.value||'RM';
+  return v||'RM';
+}
+
+function computeSplits() {
+  const trip=getTrip(STATE.currentTripId);
+  const members=trip.members||[];
+  const totalAmt=parseFloat(document.getElementById('exp-amount').value)||0;
+  const splits=[];
+  if(STATE.splitMethod==='equal'){const share=totalAmt/(members.length||1);members.forEach(m=>splits.push({member_name:m.name,amount:+share.toFixed(2)}));}
+  else if(STATE.splitMethod==='exact'){members.forEach(m=>splits.push({member_name:m.name,amount:parseFloat(document.getElementById(`split-inp-${m.id}`)?.value)||0}));}
+  else if(STATE.splitMethod==='percent'){members.forEach(m=>{const pct=parseFloat(document.getElementById(`split-inp-${m.id}`)?.value)||0;splits.push({member_name:m.name,amount:+(totalAmt*pct/100).toFixed(2)});});}
+  else if(STATE.splitMethod==='adjust'){let totalAdj=0;const adj={};members.forEach(m=>{const a=parseFloat(document.getElementById(`split-inp-${m.id}`)?.value)||0;adj[m.name]=a;totalAdj+=a;});const rem=totalAmt-totalAdj;const base=rem/(members.length||1);members.forEach(m=>splits.push({member_name:m.name,amount:+(base+(adj[m.name]||0)).toFixed(2)}));}
+  return splits;
+}
+
+function updateExpensePreview() {
+  const trip=getTrip(STATE.currentTripId);
+  if(!trip)return;
+  const members=trip.members||[];
+  const totalAmt=parseFloat(document.getElementById('exp-amount').value)||0;
+  const cur=getCurrency();
+  if(STATE.splitMethod==='equal'){members.forEach(m=>{const el=document.getElementById(`split-eq-${m.id}`);if(el)el.textContent=fmt(totalAmt/(members.length||1),cur);});}
+  const splits=computeSplits();
+  const totalSplit=splits.reduce((s,sp)=>s+sp.amount,0);
+  let validMsg='';
+  if(STATE.splitMethod==='exact'&&Math.abs(totalSplit-totalAmt)>0.01&&totalAmt>0)validMsg=`⚠️ Jumlah (${fmt(totalSplit,cur)}) ≠ ${fmt(totalAmt,cur)}`;
+  else if(STATE.splitMethod==='percent'){const totalPct=members.reduce((s,m)=>s+(parseFloat(document.getElementById(`split-inp-${m.id}`)?.value)||0),0);if(Math.abs(totalPct-100)>0.1&&totalPct>0)validMsg=`⚠️ Jumlah peratusan: ${totalPct.toFixed(1)}%. Mesti 100%.`;}
+  document.getElementById('split-validation').textContent=validMsg;
+  const previewEl=document.getElementById('split-preview');
+  if(splits.length&&totalAmt>0){
+    previewEl.style.display='block';
+    document.getElementById('split-preview-content').innerHTML=splits.map(s=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px;"><span>${s.member_name}</span><span style="font-weight:700;">${fmt(s.amount,cur)}</span></div>`).join('')+`<div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;font-weight:700;"><span>Jumlah</span><span style="color:var(--burgundy);">${fmt(totalSplit,cur)}</span></div>`;
+  } else { previewEl.style.display='none'; }
+}
+
+async function saveExpense() {
+  const trip=getTrip(STATE.currentTripId);
+  if(!trip)return;
+  const desc=document.getElementById('exp-desc').value.trim();
+  if(!desc){showToast('Keterangan tidak boleh kosong.','error');return;}
+  const amount=parseFloat(document.getElementById('exp-amount').value);
+  if(!amount||amount<=0){showToast('Sila masukkan jumlah yang sah.','error');return;}
+  const cur=getCurrency();
+  if(!cur){showToast('Sila pilih mata wang.','error');return;}
+  const expense_date=document.getElementById('exp-date').value||null;
+  const category=document.getElementById('exp-category').value;
+  const notes=document.getElementById('exp-notes').value.trim();
+  const members=trip.members||[];
+
+  const payers=[];
+  members.forEach(m=>{
+    const chk=document.getElementById(`payer-chk-${m.id}`);
+    const amt=parseFloat(document.getElementById(`payer-amt-${m.id}`)?.value);
+    if(chk?.checked&&amt>0)payers.push({member_name:m.name,amount:amt});
+  });
+  if(!payers.length){showToast('Sila pilih sekurang-kurangnya 1 pembayar.','error');return;}
+  const totalPaid=payers.reduce((s,p)=>s+p.amount,0);
+  if(Math.abs(totalPaid-amount)>0.05){showToast(`Jumlah pembayar (${fmt(totalPaid,cur)}) ≠ jumlah perbelanjaan (${fmt(amount,cur)}).`,'error');return;}
+
+  const splits=computeSplits();
+  const totalSplit=splits.reduce((s,sp)=>s+sp.amount,0);
+  if(STATE.splitMethod==='exact'&&Math.abs(totalSplit-amount)>0.05){showToast('Jumlah pengagihan tidak sama.','error');return;}
+  if(STATE.splitMethod==='percent'){const totalPct=members.reduce((s,m)=>s+(parseFloat(document.getElementById(`split-inp-${m.id}`)?.value)||0),0);if(Math.abs(totalPct-100)>0.5){showToast('Jumlah peratusan mesti 100%.','error');return;}}
+
+  showLoading(true);
+  try {
+    let expId=STATE.editingExpenseId;
+    if(expId){
+      const {error}=await supabase.from('expenses').update({description:desc,amount,currency:cur,expense_date,category,notes,split_method:STATE.splitMethod}).eq('id',expId);
+      if(error)throw error;
+      await supabase.from('payers').delete().eq('expense_id',expId);
+      await supabase.from('splits').delete().eq('expense_id',expId);
+      await logActivityDB(STATE.currentTripId,`${STATE.currentUserName||'Seseorang'} mengemaskini perbelanjaan "${desc}" (${fmt(amount,cur)}).`);
+      showToast('Perbelanjaan dikemaskini.','success');
+    } else {
+      const {data,error}=await supabase.from('expenses').insert([{trip_id:STATE.currentTripId,description:desc,amount,currency:cur,expense_date,category,notes,split_method:STATE.splitMethod}]).select().single();
+      if(error)throw error;
+      expId=data.id;
+      await logActivityDB(STATE.currentTripId,`${STATE.currentUserName||'Seseorang'} menambah perbelanjaan "${desc}" (${fmt(amount,cur)}).`);
+      showToast('Perbelanjaan disimpan! 💸','success');
+    }
+    await supabase.from('payers').insert(payers.map(p=>({expense_id:expId,...p})));
+    await supabase.from('splits').insert(splits.map(s=>({expense_id:expId,...s})));
+    closeModal('modal-expense');
+    await loadAllData();
+  } catch(e){showLoading(false);showToast('Ralat: '+e.message,'error');}
+}
+
+async function confirmDeleteExpense(expId) {
+  const trip=getTrip(STATE.currentTripId);
+  const exp=(trip.expenses||[]).find(e=>e.id===expId);
+  if(!exp)return;
+  document.getElementById('confirm-message').innerHTML=`Adakah anda pasti ingin <strong>memadam perbelanjaan "${exp.description}"</strong>?`;
+  document.getElementById('confirm-ok-btn').onclick=async()=>{
+    closeModal('modal-confirm');
+    showLoading(true);
+    try{
+      const {error}=await supabase.from('expenses').delete().eq('id',expId);
+      if(error)throw error;
+      await logActivityDB(STATE.currentTripId,`${STATE.currentUserName||'Seseorang'} memadam perbelanjaan "${exp.description}".`);
+      showToast('Perbelanjaan dipadam.','info');
+      await loadAllData();
+    }catch(e){showLoading(false);showToast('Ralat: '+e.message,'error');}
+  };
+  openModal('modal-confirm');
+}
+
+// ================================================================
+// SETTLEMENT (Supabase)
+// ================================================================
+function openSettlementModal(from,to,currency,amount){
+  STATE.settlementTarget={from,to,currency,amount};
+  document.getElementById('settle-info').innerHTML=`<strong>${from}</strong> perlu membayar kepada <strong>${to}</strong><br><span style="color:var(--red);font-size:15px;font-weight:800;">${fmt(amount,currency)}</span>`;
+  document.getElementById('settle-amount').value=amount.toFixed(2);
+  document.getElementById('settle-notes').value='';
+  document.getElementById('settle-hint').textContent=`Jumlah penuh: ${fmt(amount,currency)}`;
+  openModal('modal-settlement');
+}
+function markFullySettled(){
+  const t=STATE.settlementTarget;
+  if(!t)return;
+  recordSettlement(t.from,t.to,t.currency,t.amount,document.getElementById('settle-notes').value.trim());
+  closeModal('modal-settlement');
+}
+function savePartialSettlement(){
+  const t=STATE.settlementTarget;
+  if(!t)return;
+  const amt=parseFloat(document.getElementById('settle-amount').value);
+  if(!amt||amt<=0){showToast('Sila masukkan jumlah yang sah.','error');return;}
+  if(amt>t.amount+0.01){showToast('Jumlah melebihi hutang semasa.','error');return;}
+  recordSettlement(t.from,t.to,t.currency,amt,document.getElementById('settle-notes').value.trim());
+  closeModal('modal-settlement');
+}
+async function recordSettlement(from,to,currency,amount,notes){
+  showLoading(true);
+  try{
+    const {error}=await supabase.from('settlements').insert([{trip_id:STATE.currentTripId,from_member:from,to_member:to,currency,amount_paid:amount,notes,settle_date:today()}]);
+    if(error)throw error;
+    await logActivityDB(STATE.currentTripId,`${from} membayar ${fmt(amount,currency)} kepada ${to}.${notes?' ('+notes+')':''}`);
+    showToast(`Pembayaran ${fmt(amount,currency)} direkodkan.`,'success');
+    await loadAllData();
+  }catch(e){showLoading(false);showToast('Ralat: '+e.message,'error');}
+}
+async function deleteSettlement(id){
+  showLoading(true);
+  try{
+    const {error}=await supabase.from('settlements').delete().eq('id',id);
+    if(error)throw error;
+    showToast('Rekod pembayaran dipadam.','info');
+    await loadAllData();
+  }catch(e){showLoading(false);showToast('Ralat: '+e.message,'error');}
+}
+
+// ================================================================
+// ACTIVITY LOG (Supabase)
+// ================================================================
+async function logActivityDB(tripId, description) {
+  try { await supabase.from('activity_log').insert([{trip_id:tripId,description}]); } catch(e) {}
+}
+
+// ================================================================
+// INIT
+// ================================================================
+function init() {
+  const savedName = localStorage.getItem('ps_user');
+  if (savedName) STATE.currentUserName = savedName;
+  const config = getStoredConfig();
+  if (config) {
+    initSupabase(config.url, config.key);
+  } else {
+    document.getElementById('setup-screen').style.display = 'flex';
+  }
+}
+
+init();
+</script>
+</body>
+</html>
